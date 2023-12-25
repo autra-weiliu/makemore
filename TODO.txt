@@ -1,0 +1,2 @@
+### TODOs
+[ ] implement bigram test   
