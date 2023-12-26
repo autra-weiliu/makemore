@@ -1,5 +1,5 @@
 '''
-bigram probability based word generator
+bigram probability based word generator, non-nn solution
 '''
 import torch
 
