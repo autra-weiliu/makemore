@@ -29,7 +29,7 @@ def build_bigram_counting_map(words: List[str]) -> Tuple[Dict[Tuple[int, int], i
     return bigram_counting_map, ch_to_idx_map, idx_to_ch_map
 
 
-def build_tensor(bigram_counting_map: Dict[Tuple[int, int], int], n: int) -> torch.tensor:
+def build_tensor(bigram_counting_map: Dict[Tuple[int, int], int], n: int) -> torch.Tensor:
     bigram_tensor = torch.zeros((n, n), dtype=torch.float32)
     for i in range(n):
         for j in range(n):
