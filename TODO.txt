@@ -1,2 +1,2 @@
 ### TODOs
-[ ] implement bigram test   
+[x] implement bigram test   
