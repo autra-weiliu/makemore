@@ -1,2 +1,3 @@
 ### TODOs
 [x] implement bigram test   
+[x] multigram mlp test   
