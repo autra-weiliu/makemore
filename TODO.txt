@@ -1,4 +1,5 @@
 ### TODOs
 [x] implement bigram test   
 [ ] multigram mlp test   
-[ ] replace `loss.backward()` with manually gradient calculation   
+[ ] replace `loss.backward()` with manually gradient calculation, purely step by step gradient calculation and topologicial sort based
+gradient calculation   
