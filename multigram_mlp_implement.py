@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import numpy as np
 
 from typing import Tuple, Dict, List
@@ -8,25 +7,25 @@ from tqdm import tqdm
 SEP = '#'
 
 class MLP(torch.nn.Module):
-    def __init__(self, n_gram: int = 3, embed_dim: int = 10, hidden_layer_dim: int = 1000):
+    def __init__(self, n_gram: int = 3, input_dim: int = 27, embed_dim: int = 16, hidden_layer_dim: int = 1000, output_dim: int = 27):
         super().__init__()
         # update model meta
-        self._total_ch = 27
         self._n_gram = n_gram
         self._embed_dim = embed_dim
         self._hidden_layer_dim = hidden_layer_dim
         # embedding
-        self._embed = torch.nn.Embedding(num_embeddings=self._total_ch, embedding_dim=embed_dim)
+        self._embed = torch.nn.Embedding(num_embeddings=input_dim, embedding_dim=embed_dim)
         # layer1
         self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=hidden_layer_dim)
         self._bn1 = torch.nn.BatchNorm1d(num_features=hidden_layer_dim)
         self._act1 = torch.nn.ReLU()
         # layer2
-        self._linear2 = torch.nn.Linear(in_features=self._hidden_layer_dim, out_features=self._total_ch)
+        self._linear2 = torch.nn.Linear(in_features=self._hidden_layer_dim, out_features=output_dim)
         
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         # embedding
         out = self._embed(input_tensor)
+        # flatten multi gram's embedding features
         out = out.reshape((out.shape[0], -1))
         # layer1
         out = self._linear1(out)
@@ -66,15 +65,17 @@ def build_dataset(words: List[str], n_gram: int = 3) -> Tuple[Dict[str, int], Di
 
 # loss
 def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
-    assert model_output.shape[: 1] == gt_output.shape
+    assert model_output.shape[: 1] == gt_output.shape, f'model output shape: {model_output.shape} and gt output shape: {gt_output.shape} is not aligned'
     model_output_norm = model_output.exp()
     model_output_softmax = model_output_norm / model_output_norm.sum(dim=1, keepdim=True)
+    assert abs(model_output_softmax[0].sum().item() - 1) < 1e-4, f'model output softmax sum should be one but {model_output_softmax[0].sum().item()} is returned'
     logits = model_output_softmax[torch.arange(gt_output.shape[0]), gt_output]
     scalar_loss = - logits.log().mean()
     return scalar_loss
 
 # training config
 n_gram = 3
+embed_dim = 10
 lr = 0.001
 lr_decay_rate = 0.99
 lr_decay_iter = 10000
@@ -83,7 +84,10 @@ dataset_limit = -1
 total_epoch, batch_size = 10, 32
 
 # build model & optimizer
-model = MLP(n_gram=n_gram)
+device = torch.device(0)
+model = MLP(n_gram=n_gram, embed_dim=embed_dim)
+model.to(device)
+model.train()
 
 # build dataset
 words = load_words('./names.txt')
@@ -99,8 +103,8 @@ for epoch in range(1, total_epoch+1):
     generator.manual_seed(epoch)
     data_indexes = torch.randperm(train_matrix_torch.shape[0], generator=generator)
     for iter, batch_indexes in tqdm(enumerate(torch.split(data_indexes, split_size_or_sections=batch_size))):
-        train_sample = train_matrix_torch[batch_indexes]
-        train_sample_label = train_label_torch[batch_indexes]
+        train_sample = train_matrix_torch[batch_indexes].to(device)
+        train_sample_label = train_label_torch[batch_indexes].to(device)
         # forward model and update params based on grad
         model_output = model(train_sample)
         scalar_loss = loss(model_output=model_output, gt_output=train_sample_label)
