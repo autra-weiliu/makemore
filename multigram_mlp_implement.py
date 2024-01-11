@@ -66,7 +66,8 @@ def build_dataset(words: List[str], n_gram: int = 3) -> Tuple[Dict[str, int], Di
 
 # loss
 def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
-    model_output_softmax = F.softmax(model_output, dim=-1)
+    model_output_norm = model_output.exp()
+    model_output_softmax = model_output_norm / model_output_norm.sum(dim=1, keepdim=True)
     logits = model_output_softmax[torch.arange(gt_output.shape[0]), gt_output]
     scalar_loss = - logits.log().mean()
     return scalar_loss
