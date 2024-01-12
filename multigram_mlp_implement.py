@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 SEP = '#'
 
+# NOTE: nn.module is more complicated then expected
 class MLP(torch.nn.Module):
     def __init__(self, n_gram: int = 3, input_dim: int = 27, embed_dim: int = 16, hidden_layer_dim: int = 1000, output_dim: int = 27):
         # NOTE: important!!
@@ -93,9 +94,14 @@ model = MLP(n_gram=n_gram, embed_dim=embed_dim)
 model.to(device)
 model.train()
 
-# show model
+print('----------------------- parameters -----------------------')
 for name, param in model.named_parameters():
     print(name, param.shape)
+print('----------------------------------------------------------')
+print('------------------------- buffers ------------------------')
+for name, buffer in model.named_buffers():
+    print(name, buffer.shape)
+print('----------------------------------------------------------')
 
 # build dataset
 words = load_words('./names.txt')
