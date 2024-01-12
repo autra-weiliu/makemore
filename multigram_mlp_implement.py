@@ -1,5 +1,7 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
 
 from typing import Tuple, Dict, List
 from tqdm import tqdm
@@ -68,6 +70,7 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
     assert model_output.shape[: 1] == gt_output.shape, f'model output shape: {model_output.shape} and gt output shape: {gt_output.shape} is not aligned'
     model_output_norm = model_output.exp()
     model_output_softmax = model_output_norm / model_output_norm.sum(dim=1, keepdim=True)
+    # model_output_softmax = F.softmax(model_output, dim=-1)
     assert abs(model_output_softmax[0].sum().item() - 1) < 1e-4, f'model output softmax sum should be one but {model_output_softmax[0].sum().item()} is returned'
     logits = model_output_softmax[torch.arange(gt_output.shape[0]), gt_output]
     scalar_loss = - logits.log().mean()
@@ -76,8 +79,8 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
 # training config
 n_gram = 3
 embed_dim = 10
-lr = 0.001
-lr_decay_rate = 0.99
+lr = 0.01
+lr_decay_rate = 0.95
 lr_decay_iter = 10000
 log_iter_interval = 1000
 dataset_limit = -1
@@ -92,30 +95,35 @@ model.train()
 # build dataset
 words = load_words('./names.txt')
 ch_to_idx_map, idx_to_ch_map, train_matrix_torch, train_label_torch = build_dataset(words=words, n_gram=n_gram)
-train_matrix_torch = train_matrix_torch[: dataset_limit] if dataset_limit > 0 else train_matrix_torch
-train_label_torch = train_label_torch[: dataset_limit] if dataset_limit > 0 else train_label_torch
+train_matrix_torch: torch.Tensor = train_matrix_torch[: dataset_limit] if dataset_limit > 0 else train_matrix_torch
+train_label_torch: torch.Tensor = train_label_torch[: dataset_limit] if dataset_limit > 0 else train_label_torch
 
 # Training loop
 generator = torch.Generator()
-cur_iter = 0
+cur_iter, all_losses = 0, []
 for epoch in range(1, total_epoch+1):
     # shuffle data indexes
     generator.manual_seed(epoch)
     data_indexes = torch.randperm(train_matrix_torch.shape[0], generator=generator)
     for iter, batch_indexes in tqdm(enumerate(torch.split(data_indexes, split_size_or_sections=batch_size))):
-        train_sample = train_matrix_torch[batch_indexes].to(device)
-        train_sample_label = train_label_torch[batch_indexes].to(device)
+        train_sample = train_matrix_torch[batch_indexes].to(device, non_blocking=True)
+        train_sample_label = train_label_torch[batch_indexes].to(device, non_blocking=True)
         # forward model and update params based on grad
         model_output = model(train_sample)
         scalar_loss = loss(model_output=model_output, gt_output=train_sample_label)
         loss_value = scalar_loss.item()
+        all_losses.append(loss_value)
         scalar_loss.backward()
         for param in model.parameters():
             if param.grad is not None and param.requires_grad:
                 param.data -= lr * param.grad
         model.zero_grad()
         if iter % log_iter_interval == 0:
-            print(f'epoch: {epoch}, iter: {iter}, loss: {scalar_loss}, lr: {lr}')
+            print(f'epoch: {epoch}, iter: {iter}, loss: {loss_value}, lr: {lr}')
         cur_iter += 1
         if cur_iter % lr_decay_iter == 0:
             lr = lr * lr_decay_rate
+
+# visualize all the losses
+plt.plot(all_losses[0: -1: 100])
+plt.show()
