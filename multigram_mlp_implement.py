@@ -10,6 +10,7 @@ SEP = '#'
 
 class MLP(torch.nn.Module):
     def __init__(self, n_gram: int = 3, input_dim: int = 27, embed_dim: int = 16, hidden_layer_dim: int = 1000, output_dim: int = 27):
+        # NOTE: important!!
         super().__init__()
         # update model meta
         self._n_gram = n_gram
@@ -18,7 +19,7 @@ class MLP(torch.nn.Module):
         # embedding
         self._embed = torch.nn.Embedding(num_embeddings=input_dim, embedding_dim=embed_dim)
         # layer1
-        self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=hidden_layer_dim)
+        self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=hidden_layer_dim, bias=False)
         self._bn1 = torch.nn.BatchNorm1d(num_features=hidden_layer_dim)
         self._act1 = torch.nn.ReLU()
         # layer2
@@ -91,6 +92,10 @@ device = torch.device(0)
 model = MLP(n_gram=n_gram, embed_dim=embed_dim)
 model.to(device)
 model.train()
+
+# show model
+for name, param in model.named_parameters():
+    print(name, param.shape)
 
 # build dataset
 words = load_words('./names.txt')
