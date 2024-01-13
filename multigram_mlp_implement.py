@@ -120,7 +120,7 @@ lr_decay_rate = 0.9
 lr_decay_iter = 2000
 log_iter_interval = 1000
 dataset_limit = -1
-total_epoch, batch_size = 10, 32
+total_epoch, batch_size = 20, 32
 
 # build model & optimizer
 device = torch.device(0)
@@ -159,10 +159,11 @@ for epoch in range(1, total_epoch+1):
         all_losses.append(loss_value)
         scalar_loss.backward()
         # loss_backward(scalar_loss=scalar_loss)
-        # TODO update grad with manually calculated grad
-        for param in model.parameters():
-            if param.grad is not None and param.requires_grad:
-                param.data -= lr * param.grad
+        # optimizer optimize parameters
+        with torch.no_grad():
+            for param in model.parameters():
+                if param.grad is not None and param.requires_grad:
+                    param.data -= lr * param.grad
         model.zero_grad()
         if iter % log_iter_interval == 0:
             print(f'epoch: {epoch}, iter: {iter}, loss: {loss_value}, lr: {lr}')
@@ -175,5 +176,10 @@ model.eval()
 evaluation(model=model, eval_matrix=eval_matrix_torch, eval_label=eval_label_torch, device=device)
 
 # visualize all the losses
-plt.plot(all_losses[0: -1: 100])
+loss_batch_size = 1000
+losses_length = len(all_losses) // loss_batch_size * loss_batch_size
+losses_tensor = torch.asarray(all_losses[: losses_length])
+plt.plot(losses_tensor.view(-1, loss_batch_size).mean(dim=1))
 plt.show()
+
+# TODO add model generation logic
