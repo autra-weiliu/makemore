@@ -20,8 +20,8 @@ class MLP(torch.nn.Module):
         # embedding
         self._embed = torch.nn.Embedding(num_embeddings=input_dim, embedding_dim=embed_dim)
         # layer1
-        self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=hidden_layer_dim, bias=False)
-        self._bn1 = torch.nn.BatchNorm1d(num_features=hidden_layer_dim)
+        self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=self._hidden_layer_dim, bias=False)
+        self._bn1 = torch.nn.BatchNorm1d(num_features=self._hidden_layer_dim)
         self._act1 = torch.nn.ReLU()
         # layer2
         self._linear2 = torch.nn.Linear(in_features=self._hidden_layer_dim, out_features=output_dim)
@@ -52,7 +52,7 @@ def build_dataset(words: List[str], n_gram: int = 3) -> Tuple[Dict[str, int], Di
         ch_to_idx_map[ch] = idx
         idx_to_ch_map[idx] = ch
     # build dataset
-    train_matrix, train_label = [], []
+    data_matrix, data_label = [], []
     for word in words:
         word = (SEP * n_gram) + word + SEP
         # build n-gram dataset item
@@ -60,12 +60,24 @@ def build_dataset(words: List[str], n_gram: int = 3) -> Tuple[Dict[str, int], Di
             input_word = word[idx-n_gram: idx]
             output_character = word[idx]
             # build train item
-            train_matrix.append([ch_to_idx_map[ch] for ch in input_word])
-            train_label.append(ch_to_idx_map[output_character])
+            data_matrix.append([ch_to_idx_map[ch] for ch in input_word])
+            data_label.append(ch_to_idx_map[output_character])
     # build tensor
-    train_matrix_torch = torch.from_numpy(np.asarray(train_matrix))
-    train_label_torch = torch.from_numpy(np.asarray(train_label))
-    return ch_to_idx_map, idx_to_ch_map, train_matrix_torch, train_label_torch
+    data_matrix_torch = torch.from_numpy(np.asarray(data_matrix))
+    data_label_torch = torch.from_numpy(np.asarray(data_label))
+    return ch_to_idx_map, idx_to_ch_map, data_matrix_torch, data_label_torch
+
+def split_train_eval_dataset(data_matrix_torch, data_label_torch, seed, train_ratio=0.8):
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    total_num = data_matrix_torch.shape[0]
+    indexes = torch.randperm(n=total_num, generator=generator)
+    train_num = int(total_num * train_ratio)
+    # split train & eval dataset
+    train_indexes, eval_indexes = indexes[: train_num], indexes[train_num: ]
+    train_matrix, train_label = data_matrix_torch[train_indexes], data_label_torch[train_indexes]
+    eval_matrix, eval_label = data_matrix_torch[eval_indexes], data_label_torch[eval_indexes]
+    return train_matrix, train_label, eval_matrix, eval_label
 
 # loss
 def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
@@ -78,12 +90,29 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
     scalar_loss = - logits.log().mean()
     return scalar_loss
 
+def evaluation(model, eval_matrix, eval_label, device):
+    eval_log_interval = 1000
+    acc, total = 0, eval_matrix.shape[0]
+    model.eval()
+    with torch.no_grad():
+        for sample_id in tqdm(range(total)):
+            data, label = eval_matrix[sample_id].to(device, non_blocking=True), eval_label[sample_id].to(device, non_blocking=True)
+            data = torch.unsqueeze(data, dim=0)
+            output = model(data)
+            output_label = torch.argmax(torch.squeeze(output, dim=0))
+            if output_label == label:
+                acc += 1
+            if sample_id % eval_log_interval == 0:
+                print(f'{sample_id + 1} samples\' acc: {acc / (sample_id + 1)}')
+    print(f'final acc rate: {acc / total}')
+
 # training config
-n_gram = 3
-embed_dim = 10
+seed = 0
+n_gram = 10
+embed_dim = 32
 lr = 0.01
-lr_decay_rate = 0.95
-lr_decay_iter = 10000
+lr_decay_rate = 0.9
+lr_decay_iter = 5000
 log_iter_interval = 1000
 dataset_limit = -1
 total_epoch, batch_size = 10, 32
@@ -105,9 +134,8 @@ print('----------------------------------------------------------')
 
 # build dataset
 words = load_words('./names.txt')
-ch_to_idx_map, idx_to_ch_map, train_matrix_torch, train_label_torch = build_dataset(words=words, n_gram=n_gram)
-train_matrix_torch: torch.Tensor = train_matrix_torch[: dataset_limit] if dataset_limit > 0 else train_matrix_torch
-train_label_torch: torch.Tensor = train_label_torch[: dataset_limit] if dataset_limit > 0 else train_label_torch
+ch_to_idx_map, idx_to_ch_map, data_matrix_torch, data_label_torch = build_dataset(words=words, n_gram=n_gram)
+train_matrix_torch, train_label_torch, eval_matrix_torch, eval_label_torch = split_train_eval_dataset(data_matrix_torch=data_matrix_torch, data_label_torch=data_label_torch, seed=seed)
 
 # Training loop
 generator = torch.Generator()
@@ -134,6 +162,9 @@ for epoch in range(1, total_epoch+1):
         cur_iter += 1
         if cur_iter % lr_decay_iter == 0:
             lr = lr * lr_decay_rate
+
+# eval model
+evaluation(model=model, eval_matrix=eval_matrix_torch, eval_label=eval_label_torch, device=device)
 
 # visualize all the losses
 plt.plot(all_losses[0: -1: 100])
