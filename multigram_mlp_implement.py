@@ -90,8 +90,13 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
     scalar_loss = - logits.log().mean()
     return scalar_loss
 
-def evaluation(model, eval_matrix, eval_label, device, eval_log_interval=1000):
-    acc, total = 0, eval_matrix.shape[0]
+# manually loss backward
+def loss_backward(scalar_loss: torch.Tensor):
+    # TODO implement topological sort grad calculation
+    pass
+
+def evaluation(model: torch.nn.Module, eval_matrix: torch.Tensor, eval_label: torch.Tensor, device: torch.device, eval_log_interval=1000):
+    acc, total, eval_loss = 0.0, eval_matrix.shape[0], 0.0
     with torch.no_grad():
         for sample_id in tqdm(range(total)):
             data, label = eval_matrix[sample_id].to(device, non_blocking=True), eval_label[sample_id].to(device, non_blocking=True)
@@ -100,9 +105,11 @@ def evaluation(model, eval_matrix, eval_label, device, eval_log_interval=1000):
             output_label = torch.argmax(torch.squeeze(output, dim=0))
             if output_label == label:
                 acc += 1
+            softmax_output = F.softmax(output, dim=-1)
+            eval_loss += (- softmax_output[0, label].log())
             if sample_id % eval_log_interval == 0:
-                print(f'{sample_id + 1} samples\' acc: {acc / (sample_id + 1)}')
-    print(f'final acc rate: {acc / total}')
+                print(f'{sample_id + 1} samples\' acc: {acc / (sample_id + 1)}, loss: {eval_loss / (sample_id + 1)}')
+    print(f'final acc rate: {acc / total}, loss: {eval_loss / total}')
 
 # training config
 seed = 0
@@ -110,7 +117,7 @@ n_gram = 10
 embed_dim = 32
 lr = 0.01
 lr_decay_rate = 0.9
-lr_decay_iter = 5000
+lr_decay_iter = 2000
 log_iter_interval = 1000
 dataset_limit = -1
 total_epoch, batch_size = 10, 32
@@ -151,6 +158,8 @@ for epoch in range(1, total_epoch+1):
         loss_value = scalar_loss.item()
         all_losses.append(loss_value)
         scalar_loss.backward()
+        # loss_backward(scalar_loss=scalar_loss)
+        # TODO update grad with manually calculated grad
         for param in model.parameters():
             if param.grad is not None and param.requires_grad:
                 param.data -= lr * param.grad
