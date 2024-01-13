@@ -90,10 +90,8 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
     scalar_loss = - logits.log().mean()
     return scalar_loss
 
-def evaluation(model, eval_matrix, eval_label, device):
-    eval_log_interval = 1000
+def evaluation(model, eval_matrix, eval_label, device, eval_log_interval=1000):
     acc, total = 0, eval_matrix.shape[0]
-    model.eval()
     with torch.no_grad():
         for sample_id in tqdm(range(total)):
             data, label = eval_matrix[sample_id].to(device, non_blocking=True), eval_label[sample_id].to(device, non_blocking=True)
@@ -164,6 +162,7 @@ for epoch in range(1, total_epoch+1):
             lr = lr * lr_decay_rate
 
 # eval model
+model.eval()
 evaluation(model=model, eval_matrix=eval_matrix_torch, eval_label=eval_label_torch, device=device)
 
 # visualize all the losses
