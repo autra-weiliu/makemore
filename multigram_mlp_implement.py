@@ -9,6 +9,7 @@ from tqdm import tqdm
 SEP = '#'
 
 # NOTE: nn.module is more complicated then expected
+# TODO wavenet structure
 class MLP(torch.nn.Module):
     def __init__(self, n_gram: int = 3, input_dim: int = 27, embed_dim: int = 16, hidden_layer_dim: int = 1000, output_dim: int = 27):
         # NOTE: important!!
