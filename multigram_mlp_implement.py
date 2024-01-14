@@ -91,11 +91,6 @@ def loss(model_output: torch.Tensor, gt_output: torch.Tensor) -> torch.Tensor:
     scalar_loss = - logits.log().mean()
     return scalar_loss
 
-# manually loss backward
-def loss_backward(scalar_loss: torch.Tensor):
-    # TODO implement topological sort grad calculation
-    pass
-
 def evaluation(model: torch.nn.Module, eval_matrix: torch.Tensor, eval_label: torch.Tensor, device: torch.device, eval_log_interval=1000):
     acc, total, eval_loss = 0.0, eval_matrix.shape[0], 0.0
     with torch.no_grad():
@@ -141,6 +136,9 @@ print('----------------------------------------------------------')
 # build dataset
 words = load_words('./names.txt')
 ch_to_idx_map, idx_to_ch_map, data_matrix_torch, data_label_torch = build_dataset(words=words, n_gram=n_gram)
+# choose dataset subset
+data_matrix_torch = data_matrix_torch if dataset_limit < 0 else data_matrix_torch[: dataset_limit]
+data_label_torch = data_label_torch if dataset_limit < 0 else data_label_torch[: dataset_limit]
 train_matrix_torch, train_label_torch, eval_matrix_torch, eval_label_torch = split_train_eval_dataset(data_matrix_torch=data_matrix_torch, data_label_torch=data_label_torch, seed=seed)
 
 # Training loop
@@ -159,7 +157,6 @@ for epoch in range(1, total_epoch+1):
         loss_value = scalar_loss.item()
         all_losses.append(loss_value)
         scalar_loss.backward()
-        # loss_backward(scalar_loss=scalar_loss)
         # optimizer optimize parameters
         with torch.no_grad():
             for param in model.parameters():
@@ -183,4 +180,18 @@ losses_tensor = torch.asarray(all_losses[: losses_length])
 plt.plot(losses_tensor.view(-1, loss_batch_size).mean(dim=1))
 plt.show()
 
-# TODO add model generation logic
+# model generation example
+model.eval()
+context = [ch_to_idx_map[SEP]] * n_gram
+output_string = ''
+while True:
+    input_tensor = torch.unsqueeze(torch.asarray(context), dim=0)
+    input_tensor = input_tensor.to(device, non_blocking=True)
+    output_tensor = model(input_tensor)
+    output_idx = torch.argmax(output_tensor[0, :], dim=0).item()
+    if output_idx == ch_to_idx_map[SEP]:
+        break
+    else:
+        output_string += idx_to_ch_map[output_idx]
+        context = context[1: ] + [output_idx]
+print(output_string)

@@ -1,9 +1,7 @@
 ### TODOs
 [x] implement bigram test   
 [x] multigram mlp test   
-[ ] implement model generation logic   
-[ ] replace `loss.backward()` with manually gradient calculation, purely step by step gradient calculation and topologicial sort based
-gradient calculation   
+[x] implement model generation logic   
 [ ] wavenet structure   
 [ ] learn rnn   
 [ ] learn gru
