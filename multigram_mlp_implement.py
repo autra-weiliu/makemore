@@ -61,6 +61,75 @@ class MLP(torch.nn.Module):
         out = self._linear(out)
         return out
 
+class HierachyLinearBlock(torch.nn.Module):
+    def __init__(self, in_features: int, out_features: int) -> None:
+        super().__init__()
+        self._linear = torch.nn.Linear(in_features=in_features, out_features=out_features, bias=False)
+        self._bn = torch.nn.BatchNorm1d(num_features=out_features)
+        self._relu = torch.nn.ReLU()
+
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        if input_tensor.ndim == 3:
+            # for bn
+            out = self._linear(input_tensor).permute(0, 2, 1)
+            out = self._bn(out)
+            out = out.permute(0, 2, 1)
+            out = self._relu(out)
+        else:
+            out = self._linear(input_tensor)
+            out = self._bn(out)
+            out = self._relu(out)
+        return out
+
+class HierachyMLP(torch.nn.Module):
+    def __init__(
+        self,
+        n_gram: int = 3,
+        input_dim: int = 27,
+        embed_dim: int = 16,
+        hidden_layer_dim: int = 512,
+        output_dim: int = 27
+    ):
+        # NOTE: important!!
+        super().__init__()
+        # update model meta
+        assert n_gram - (n_gram & (- n_gram)) == 0, 'n_gram should be power of two'
+        self._n_gram = n_gram
+        self._embed_dim = embed_dim
+
+        # embedding
+        self._embed = torch.nn.Embedding(num_embeddings=input_dim, embedding_dim=embed_dim)
+
+        # middle blocks
+        self._blocks = torch.nn.ModuleList()
+        # first block
+        self._blocks.append(HierachyLinearBlock(in_features=embed_dim * 2, out_features=hidden_layer_dim))
+        # middle blocks
+        layer_value = n_gram
+        while layer_value > 2:
+            self._blocks.append(HierachyLinearBlock(in_features=hidden_layer_dim * 2, out_features=hidden_layer_dim))
+            layer_value /= 2
+        # last block
+        self._blocks.append(HierachyLinearBlock(in_features=hidden_layer_dim, out_features=hidden_layer_dim))
+
+        # classification layer
+        self._linear = torch.nn.Linear(in_features=hidden_layer_dim, out_features=output_dim)
+        
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        # embedding
+        out = self._embed(input_tensor)
+        # hidden layers
+        out = out.view(out.shape[0], -1, out.shape[-1] * 2)
+        out = self._blocks[0](out)
+        for block_idx in range(1, len(self._blocks) - 1):
+            out = out.reshape(out.shape[0], -1, out.shape[-1] * 2)
+            out = self._blocks[block_idx](out)
+        out = out.squeeze(1)
+        out = self._blocks[-1](out)
+        # classification layer
+        out = self._linear(out)
+        return out
+
 def load_words(filepath: str) -> List[str]:
     with open(filepath, 'r') as f:
         return f.read().splitlines()
@@ -130,18 +199,18 @@ def evaluation(model: torch.nn.Module, eval_matrix: torch.Tensor, eval_label: to
 
 # training config
 seed = 0
-n_gram = 10
-embed_dim = 32
+n_gram = 32
+embed_dim = 64
 lr = 0.01
 lr_decay_rate = 0.9
 lr_decay_iter = 2000
 log_iter_interval = 1000
 dataset_limit = -1
-total_epoch, batch_size = 10, 32
+total_epoch, batch_size = 20, 32
 
 # build model & optimizer
 device = torch.device(0)
-model = MLP(n_gram=n_gram, embed_dim=embed_dim)
+model = HierachyMLP(n_gram=n_gram, embed_dim=embed_dim)
 model.to(device)
 model.train()
 

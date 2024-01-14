@@ -2,7 +2,7 @@
 [x] implement bigram test   
 [x] multigram mlp test   
 [x] implement model generation logic   
-[ ] wavenet structure   
+[x] wavenet structure   
 [ ] learn rnn   
 [ ] learn gru
 [ ] learn transformer   
