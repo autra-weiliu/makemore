@@ -70,7 +70,7 @@ class HierachyLinearBlock(torch.nn.Module):
 
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         if input_tensor.ndim == 3:
-            # for bn
+            # for bn, need to permute dims
             out = self._linear(input_tensor).permute(0, 2, 1)
             out = self._bn(out)
             out = out.permute(0, 2, 1)
@@ -122,7 +122,7 @@ class HierachyMLP(torch.nn.Module):
         out = out.view(out.shape[0], -1, out.shape[-1] * 2)
         out = self._blocks[0](out)
         for block_idx in range(1, len(self._blocks) - 1):
-            out = out.reshape(out.shape[0], -1, out.shape[-1] * 2)
+            out = out.contiguous().view(out.shape[0], -1, out.shape[-1] * 2)
             out = self._blocks[block_idx](out)
         out = out.squeeze(1)
         out = self._blocks[-1](out)
