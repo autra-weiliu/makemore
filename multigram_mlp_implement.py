@@ -8,36 +8,57 @@ from tqdm import tqdm
 
 SEP = '#'
 
+class LinearBlock(torch.nn.Module):
+    def __init__(self, in_features: int, out_features: int) -> None:
+        super().__init__()
+        self._linear = torch.nn.Linear(in_features=in_features, out_features=out_features, bias=False)
+        self._bn = torch.nn.BatchNorm1d(num_features=out_features)
+        self._relu = torch.nn.ReLU()
+
+    def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        out = self._linear(input_tensor)
+        out = self._bn(out)
+        out = self._relu(out)
+        return out
+
 # NOTE: nn.module is more complicated then expected
-# TODO wavenet structure
 class MLP(torch.nn.Module):
-    def __init__(self, n_gram: int = 3, input_dim: int = 27, embed_dim: int = 16, hidden_layer_dim: int = 1000, output_dim: int = 27):
+    def __init__(
+        self,
+        n_gram: int = 3,
+        input_dim: int = 27,
+        embed_dim: int = 16,
+        hidden_layer_dims: Tuple[int] = (200, 400, 800, 400),
+        output_dim: int = 27
+    ):
         # NOTE: important!!
         super().__init__()
         # update model meta
         self._n_gram = n_gram
         self._embed_dim = embed_dim
-        self._hidden_layer_dim = hidden_layer_dim
         # embedding
         self._embed = torch.nn.Embedding(num_embeddings=input_dim, embedding_dim=embed_dim)
-        # layer1
-        self._linear1 = torch.nn.Linear(in_features=self._n_gram * embed_dim, out_features=self._hidden_layer_dim, bias=False)
-        self._bn1 = torch.nn.BatchNorm1d(num_features=self._hidden_layer_dim)
-        self._act1 = torch.nn.ReLU()
-        # layer2
-        self._linear2 = torch.nn.Linear(in_features=self._hidden_layer_dim, out_features=output_dim)
+        # hidden layers block
+        assert len(hidden_layer_dims) > 0, 'hidden layer should not be empty'
+        self._blocks = torch.nn.Sequential()
+        for idx, hidden_layer_dim in enumerate(hidden_layer_dims):
+            # two dims
+            in_features = self._n_gram * embed_dim if idx == 0 else hidden_layer_dims[idx - 1]
+            out_features = hidden_layer_dim
+            # append block
+            self._blocks.append(LinearBlock(in_features=in_features, out_features=out_features))
+        # classification layer
+        self._linear = torch.nn.Linear(in_features=hidden_layer_dims[-1], out_features=output_dim)
         
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         # embedding
         out = self._embed(input_tensor)
         # flatten multi gram's embedding features
         out = out.reshape((out.shape[0], -1))
-        # layer1
-        out = self._linear1(out)
-        out = self._bn1(out)
-        out = self._act1(out)
-        # layer2
-        out = self._linear2(out)
+        # hidden layers
+        out = self._blocks(out)
+        # classification layer
+        out = self._linear(out)
         return out
 
 def load_words(filepath: str) -> List[str]:
@@ -116,7 +137,7 @@ lr_decay_rate = 0.9
 lr_decay_iter = 2000
 log_iter_interval = 1000
 dataset_limit = -1
-total_epoch, batch_size = 20, 32
+total_epoch, batch_size = 10, 32
 
 # build model & optimizer
 device = torch.device(0)
@@ -125,8 +146,11 @@ model.to(device)
 model.train()
 
 print('----------------------- parameters -----------------------')
+total_params = 0
 for name, param in model.named_parameters():
     print(name, param.shape)
+    total_params += param.numel()
+print(f'total number of parameters: {total_params}')
 print('----------------------------------------------------------')
 print('------------------------- buffers ------------------------')
 for name, buffer in model.named_buffers():
