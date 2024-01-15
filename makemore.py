@@ -258,7 +258,6 @@ both a hidden state and a cell state, but it's very similar to GRU and in
 practice works just as well.
 """
 
-# TODO(learn rnn and gru)
 class RNNCell(nn.Module):
     """
     the job of a 'Cell' is to:
