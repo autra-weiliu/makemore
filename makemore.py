@@ -267,6 +267,7 @@ class RNNCell(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
+        # NOTE: matmul concat optimization in rnn
         self.xh_to_h = nn.Linear(config.n_embd + config.n_embd2, config.n_embd2)
 
     def forward(self, xt, hprev):

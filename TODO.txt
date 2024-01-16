@@ -3,6 +3,6 @@
 [x] multigram mlp test   
 [x] implement model generation logic   
 [x] wavenet structure   
-[ ] learn rnn   
+[x] learn rnn   
 [ ] learn gru
 [ ] learn transformer   
