@@ -78,6 +78,14 @@ class RnnCell(torch.nn.Module):
         out = F.tanh(out)
         return out
 
+class GruCell(torch.nn.Module):
+    def __init__(self, word_embed_dim: int, hidden_embed_dim: int) -> None:
+        super().__init__()
+        # TODO implement it
+
+    def forward(self, x: torch.Tensor, hprev: torch.Tensor) -> torch.Tensor:
+        pass
+
 class RNNModel(torch.nn.Module):
     def __init__(self, vocab_size: int = 27, word_embed_dim: int = 64, hidden_embed_dim: int = 64) -> None:
         super().__init__()
