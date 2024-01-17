@@ -81,13 +81,21 @@ class RnnCell(torch.nn.Module):
 class GruCell(torch.nn.Module):
     def __init__(self, word_embed_dim: int, hidden_embed_dim: int) -> None:
         super().__init__()
-        # TODO implement it
+        self._reset_linear = torch.nn.Linear(in_features=word_embed_dim + hidden_embed_dim, out_features=hidden_embed_dim)
+        self._update_linear = torch.nn.Linear(in_features=word_embed_dim + hidden_embed_dim, out_features=hidden_embed_dim)
+        self._candidate_linear = torch.nn.Linear(in_features=word_embed_dim + hidden_embed_dim, out_features=hidden_embed_dim)
 
     def forward(self, x: torch.Tensor, hprev: torch.Tensor) -> torch.Tensor:
-        pass
+        # get reset gate first
+        hprev_reset = F.sigmoid(self._reset_linear(torch.cat([x, hprev], dim=1)))
+        hprev_update = F.sigmoid(self._update_linear(torch.cat([x, hprev], dim=1)))
+        # get h candidate
+        h_candidate = F.relu(self._candidate_linear(torch.cat([x, (1 - hprev_reset) * hprev], dim=1)))
+        # get final hidden output
+        return F.relu(h_candidate * (1 - hprev_update) + hprev_update * hprev)
 
 class RNNModel(torch.nn.Module):
-    def __init__(self, vocab_size: int = 27, word_embed_dim: int = 64, hidden_embed_dim: int = 64) -> None:
+    def __init__(self, vocab_size: int = 27, word_embed_dim: int = 64, hidden_embed_dim: int = 64, cell_type='rnn') -> None:
         super().__init__()
         # dims
         self._word_embed_dim = word_embed_dim
@@ -97,7 +105,15 @@ class RNNModel(torch.nn.Module):
         self._vocab_embed = torch.nn.Embedding(num_embeddings=self._vocab_size, embedding_dim=self._word_embed_dim)
         self._init_state = torch.nn.Parameter(torch.zeros(1, self._hidden_embed_dim))
         self._lm_head = torch.nn.Linear(in_features=self._hidden_embed_dim, out_features=self._vocab_size)
-        self._cell = RnnCell(word_embed_dim=self._word_embed_dim, hidden_embed_dim=self._hidden_embed_dim)
+        # build cell
+        cell_class_type = None
+        if cell_type == 'rnn':
+            cell_class_type = RnnCell
+        elif cell_type == 'gru':
+            cell_class_type = GruCell
+        else:
+            raise RuntimeError(f'cell type: {cell_type} is not supported')
+        self._cell = cell_class_type(word_embed_dim=self._word_embed_dim, hidden_embed_dim=self._hidden_embed_dim)
     
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input_embed = self._vocab_embed(input)
@@ -118,18 +134,17 @@ class RNNModel(torch.nn.Module):
 
 # training config
 seed = 0
-n_gram = 10
-embed_dim = 16
-lr = 0.01
+n_gram = 16
+lr = 0.005
 lr_decay_rate = 0.9
-lr_decay_iter = 2000
+lr_decay_iter = 4000
 log_iter_interval = 1000
 dataset_limit = -1
 total_epoch, batch_size = 6, 32
 
 # build model & optimizer
 device = torch.device(0)
-model = RNNModel(word_embed_dim=128, hidden_embed_dim=128)
+model = RNNModel(word_embed_dim=128, hidden_embed_dim=128, cell_type='gru')
 model.train().to(device=device)
 model.zero_grad()
 

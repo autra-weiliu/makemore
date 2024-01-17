@@ -4,5 +4,5 @@
 [x] implement model generation logic   
 [x] wavenet structure   
 [x] learn rnn   
-[ ] learn gru
+[x] learn gru
 [ ] learn transformer   
