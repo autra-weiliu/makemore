@@ -5,5 +5,6 @@
 [x] wavenet structure   
 [x] learn rnn   
 [x] learn gru
-[ ] NW kernel regression
+[ ] NW kernel regression   
+[ ] attention   
 [ ] learn transformer   
