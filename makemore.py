@@ -50,6 +50,7 @@ class NewGELU(nn.Module):
     def forward(self, x):
         return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3.0))))
 
+# TODO(wei.liu) understand how self-attention works
 class CausalSelfAttention(nn.Module):
     """
     A vanilla multi-head masked self-attention layer with a projection at the end.
@@ -108,6 +109,7 @@ class Block(nn.Module):
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
+        # x: (32, 16, 64)
         x = x + self.mlpf(self.ln_2(x))
         return x
 
@@ -120,6 +122,7 @@ class Transformer(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
+            # TODO(wei.liu) need a real positional embedding
             wpe = nn.Embedding(config.block_size, config.n_embd),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
@@ -135,17 +138,23 @@ class Transformer(nn.Module):
 
     def forward(self, idx, targets=None):
         device = idx.device
+        # idx: (32, 16)
         b, t = idx.size()
         assert t <= self.block_size, f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
+        # pos: (1, 16)
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
 
         # forward the GPT model itself
+        # tok_emb: (32, 16, 64)
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        # pos_emb: (1, 16, 64)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = tok_emb + pos_emb
         for block in self.transformer.h:
             x = block(x)
+        # x: (32, 16, 64)
         x = self.transformer.ln_f(x)
+        # logits: (32, 16, 27)
         logits = self.lm_head(x)
 
         # if we are given some desired targets also calculate the loss
@@ -535,12 +544,14 @@ class CharDataset(Dataset):
 
     def __getitem__(self, idx):
         word = self.words[idx]
+        # ix: (5)
         ix = self.encode(word)
         x = torch.zeros(self.max_word_length + 1, dtype=torch.long)
         y = torch.zeros(self.max_word_length + 1, dtype=torch.long)
         x[1:1+len(ix)] = ix
         y[:len(ix)] = ix
         y[len(ix)+1:] = -1 # index -1 will mask the loss at the inactive locations
+        # x: (16), y: (16)
         return x, y
 
 def create_datasets(input_file):
@@ -676,6 +687,7 @@ if __name__ == '__main__':
         batch = batch_loader.next()
         batch = [t.to(args.device) for t in batch]
         X, Y = batch
+        # bs: 32, X: (32, 16), y: (32, 16)
 
         # feed into the model
         logits, loss = model(X, Y)
