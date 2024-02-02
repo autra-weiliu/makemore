@@ -43,7 +43,7 @@ bigram_counting_map, ch_to_idx_map, idx_to_ch_map = build_bigram_counting_map(wo
 bigram_tensor = build_tensor(bigram_counting_map=bigram_counting_map, n=len(ch_to_idx_map))
 p_tensor = bigram_tensor / bigram_tensor.sum(dim=1, keepdim=True)
 
-# TODO(hack tensor to make it uniform)
+# NOTE: (hack tensor to make it uniform)
 # p_tensor = torch.ones_like(p_tensor) / 27.0
 
 generator = torch.Generator()
